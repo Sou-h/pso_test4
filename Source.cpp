@@ -6,25 +6,21 @@
 /* 記号定数 */
 #define NOPS	40				//粒子の個数
 #define LIMITL 256			//配列最大領域
-#define ILIMIT	100			//繰り返しの回数
+#define ILIMIT	10				//繰り返しの回数
 #define SEED	32767		//乱数の初期値
 #define W			0.3			//慣性定数
 #define C1		1.0			//ローカルな質量
 #define C2		1.0			//グローバルな質量
 #define DIM		2				//次元数
+#define EVALUATION_NUM 3
 #define PI			3.14159265359
-
-// 平面座標を表現する構造体 
-struct point {
-	double x[DIM];
-};
 
 // 粒子を表現する構造体 
 struct particle {
-	struct point pos;		/*位置*/
+	double pos[DIM];		/*位置*/
 	double value;				/*評価値*/
-	struct point v;			/*速度*/
-	struct point bestpos;	/*最適位置*/
+	double v [DIM];			/*速度*/
+	double bestpos [DIM];	/*最適位置*/
 	double bestval;			/*最適評価値*/
 };
 /* 関数のプロトタイプの宣言 */
@@ -36,7 +32,7 @@ void optimize(struct particle ps[]);	/*粒子群の位置更新*/
 void setgbest(struct particle ps[]);	/* 群れの最適位置を格納 */
 
 										/*大域変数*/
-struct point gbestpos;	/*群中の最適位置*/
+double gbestpos[DIM];	/*群中の最適位置*/
 double gbestval;			/*群中の最適評価値*/
 
 							// main() 関数/
@@ -68,26 +64,28 @@ void optimize(struct particle ps[])
 {
 	int i;
 	double r1, r2;/*乱数の値を格納*/
-	for (i = 0; i<NOPS; ++i) {
+	for (i = 0; i<NOPS; i++) {
 		/*乱数の設定*/
 		r1 = frand();
 		r2 = frand();
 		/*速度の更新*/
 		for (int j = 0; j < DIM; j++) {
-			ps[i].v.x[j] = W*ps[i].v.x[j]
-				+ C1*r1*(ps[i].bestpos.x[j] - ps[i].pos.x[j])
-				+ C2*r2*(gbestpos.x[j] - ps[i].pos.x[j]);
+			ps[i].v[j] = W*ps[i].v[j]
+				+ C1*r1*(ps[i].bestpos[j] - ps[i].pos[j])
+				+ C2*r2*(gbestpos[j] - ps[i].pos[j]);
 			/*位置の更新*/
-			ps[i].pos.x[j] += ps[i].v.x[j];
+			ps[i].pos[j] += ps[i].v[j];
 
 		}
 
 		/*最適値の更新*/
-		ps[i].value = calcval(ps[i].pos.x);
+		ps[i].value = calcval(ps[i].pos);
 
 		if (ps[i].value<ps[i].bestval) {
-			ps[i].bestval = ps[i].value;
-			ps[i].bestpos = ps[i].pos;
+			ps[i].bestval	= ps[i].value;
+			for (int j = 0; j < DIM;j++) {
+				ps[i].bestpos[j] = ps[i].pos[j];
+			}
 		}
 	}
 	/*群中最適値の更新*/
@@ -98,19 +96,28 @@ void optimize(struct particle ps[])
 // 評価値の計算 
 double calcval(double *x)
 {
-	double sum = 1;
-	/*	for (int i = 0; i < DIM ; i++){
-	sum += x[i]*x[i];
+	double sum = 0;
+	switch (EVALUATION_NUM)
+	{
+	case 1:
+		for (int i = 0; i < DIM; i++) {
+			sum += x[i] * x[i];
+		}
+		break;
+	case 2:
+		for (int i = 0; i < DIM; i++) {
+			sum += pow(x[i], 4.0) - 16 * pow(x[i], 2.0) + 5 * x[i];
+		}
+		break;
+	case 3:
+		for (int i = 0; i < DIM; i++) {
+			sum += pow(x[i], 2.0) - 10 * cos(2 * PI*x[i]) + 10;
+		}
+		break;
+
+	default:
+		printf("存在しない評価関数の数字です\nEVALUATION_NUMを変更してください\n");
 	}
-	*/
-	/*	for (int i = 0; i < DIM; i++) {
-	sum += pow(x[i],4.0)-16*pow(x[i],2.0)+5*x[i];
-	}
-	*/
-	for (int i = 0; i < DIM; i++) {
-		sum += pow(x[i], 2.0) - 10 * cos(2 * PI*x[i]) + 10;
-	}
-	//	printf("sum=%.6lf\n", sum);
 	return sum;
 }
 
@@ -133,7 +140,7 @@ void setgbest(struct particle ps[])
 	double x[NOPS];
 	besti = ps[0].value;
 	for (int for_count = 0; for_count < DIM; for_count++) {
-		x[for_count] = ps[0].pos.x[for_count];
+		x[for_count] = ps[0].pos[for_count];
 	}
 
 	for (i = 0; i < NOPS; i++)
@@ -141,7 +148,7 @@ void setgbest(struct particle ps[])
 		if (ps[i].value < besti) {
 			besti = ps[i].value;
 			for (int j = 0; j < DIM; j++) {
-				x[j] = ps[i].pos.x[j];
+				x[j] = ps[i].pos[j];
 			}
 
 		}
@@ -150,7 +157,7 @@ void setgbest(struct particle ps[])
 	if (besti < gbestval) {
 		gbestval = besti;
 		for (int j = 0; j < DIM; j++) {
-			gbestpos.x[j] = x[j];
+			gbestpos[j] = x[j];
 		}
 	}
 
@@ -165,17 +172,17 @@ void initps(struct particle ps[])
 	for (i = 0; i < NOPS; i++) {
 		/*位置*/
 		for (int j = 0; j < DIM; j++) {
-			x[j] = ps[i].pos.x[j] = frand() * 2 - 1.0;
+			x[j] = ps[i].pos[j] = frand() * 2 - 1.0;
 		}
 		/*評価値*/
 		ps[i].value = calcval(x);
 		/*速度*/
 		for (int j = 0; j < DIM; j++) {
-			ps[i].v.x[j] = frand() * 2 - 1.0;
+			ps[i].v[j] = frand() * 2 - 1.0;
 		}
 		/*最適位置*/
 		for (int j = 0; j < DIM; j++) {
-			ps[i].bestpos.x[j] = ps[i].pos.x[j];
+			ps[i].bestpos[j] = ps[i].pos[j];
 		}
 		/*最適評価値*/
 		ps[i].bestval = ps[i].value;
@@ -184,7 +191,7 @@ void initps(struct particle ps[])
 	/*群れの最適位置を格納*/
 	gbestval = ps[0].value;
 	for (int j = 0; j < DIM; j++) {
-		gbestpos.x[j] = ps[0].pos.x[j];
+		gbestpos[j] = ps[0].pos[j];
 	}
 
 	setgbest(ps);
@@ -199,13 +206,13 @@ void printps(struct particle ps[])
 	int i;
 	for (i = 0; i<NOPS; ++i) {
 		printf("粒子%d\t", i);
-		for (int j = 0; j < DIM; j++)		printf("x[%d]=%.4lf\t", j, ps[i].pos.x[j]);
+		for (int j = 0; j < DIM; j++)		printf("x[%d]=%.4lf\t", j, ps[i].pos[j]);
 		printf("評価値%2.6lf\t", ps[i].value);
 		//		printf("%lf %lf ", ps[i].v.x, ps[i].v.y);
 		//		printf("%lf %lf ",ps[i].bestpos.x, ps[i].bestpos.y);
 		printf("最適評価値%lf\n", ps[i].bestval);
 	}
-	for (int j = 0; j < DIM; j++)	printf("結果 %.6lf\t ", gbestpos.x[j]);
+	for (int j = 0; j < DIM; j++)	printf("結果 %.6lf\t ", gbestpos[j]);
 	printf("評価\t%2.6lf\n", gbestval);
 }
 
